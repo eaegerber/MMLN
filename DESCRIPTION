@@ -1,0 +1,26 @@
+Package: MMLN
+Type: Package
+Title: Fitting and Evaluating Mixed Effects Multinomial Logistic Normal Regression Models
+Version: 0.0.0.9000
+Authors@R: c(
+    person("Eric", "Gerber", 
+           email = "e.gerber@northeastern.edu", 
+           role = c("aut", "cre"),
+           comment = c(ORCID = "0009-0008-0042-7051"))
+ )
+Description: Tools for fitting and evaluating mixed effects multinomial regression models, including 
+    methods for calculating squared Mahalanobis distance residuals and testing model fit.
+License: GPL-3
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Depends: R (>= 3.5.0)
+Imports: 
+    stats,
+    graphics,
+    mvnfast,
+    utils
+Suggests: 
+    testthat,
+    knitr,
+    rmarkdown
