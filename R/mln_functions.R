@@ -137,7 +137,7 @@ FMLN <- function(Y, X, n_iter = 1000, burn_in = 0, thin = 1, mh_scale = 1, prior
     S <- (S + t(S)) / 2
     diag(S) <- diag(S) + 1e-8
 
-    Wishscale <- solve(S)
+    Wishscale <- chol2inv(chol(S))
     Wishscale <- (Wishscale + t(Wishscale)) / 2
     diag(Wishscale) <- diag(Wishscale) + 1e-8
 
@@ -309,7 +309,7 @@ MMLN <- function(Y, X, Z, n_iter = 1000, burn_in = 0, thin = 1, mh_scale = 1, pr
     for(j in seq_len(m)) {
       idx <- which(Z[, j] == 1)
       R_j <- R_tot[idx, , drop = FALSE]
-      V_j <- solve(chol2inv(chol(Phi)) + length(idx) * Sigma_inv)
+      V_j <- chol2inv(chol(chol2inv(chol(Phi)) + length(idx) * Sigma_inv))
       M_j <- V_j %*% (Sigma_inv %*% colSums(R_j))
       psi[j, ] <- mvnfast::rmvn(1, mu = as.vector(M_j), sigma = V_j)
     }
@@ -322,13 +322,13 @@ MMLN <- function(Y, X, Z, n_iter = 1000, burn_in = 0, thin = 1, mh_scale = 1, pr
     S1 <- (S1 + t(S1)) / 2
     diag(S1) <- diag(S1) + 1e-8
 
-    Wish1scale <- solve(S1)
+    Wish1scale <- chol2inv(chol(S1))
     Wish1scale <- (Wish1scale + t(Wish1scale)) / 2
     diag(Wish1scale) <- diag(Wish1scale) + 1e-8
 
-    Phi   <- solve(rWishart(1,
+    Phi   <- chol2inv(chol(rWishart(1,
                             df    = prior_settings$nu_P + m,
-                            Sigma = Wish1scale)[,,1])
+                            Sigma = Wish1scale)[,,1]))
 
     # update beta
     R     <- W - Z %*% psi
@@ -350,13 +350,13 @@ MMLN <- function(Y, X, Z, n_iter = 1000, burn_in = 0, thin = 1, mh_scale = 1, pr
     S2 <- (S2 + t(S2)) / 2
     diag(S2) <- diag(S2) + 1e-8
 
-    Wish2scale <- solve(S2)
+    Wish2scale <- chol2inv(chol(S2))
     Wish2scale <- (Wish2scale + t(Wish2scale)) / 2
     diag(Wish2scale) <- diag(Wish2scale) + 1e-8
 
-    Sigma <- solve(rWishart(1,
+    Sigma <- chol2inv(chol(rWishart(1,
                             df    = prior_settings$nu_S + N,
-                            Sigma = Wish2scale)[,,1])
+                            Sigma = Wish2scale)[,,1]))
     Sigma_inv <- chol2inv(chol(Sigma))
 
     # save samples

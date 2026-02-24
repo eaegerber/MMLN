@@ -253,7 +253,7 @@ MDres <- function(Y, Y_pred_list) {
       pct <- floor(100 * i / N)
       elapsed <- Sys.time() - start_time
       eta <- (as.numeric(elapsed) / i) * (N - i)
-      cat(sprintf("\r[%3d%%] ETA: %s", pct, format(.POSIXct(eta, tz="GMT"), "%M:%S")))
+      cat(sprintf("\r[%3d%%] ETA: %s", pct, format(.POSIXct(eta, tz="GMT"), "%H:%M:%S")))
       flush.console()
     }
     pred_i <- t(pred_array[i,,])
@@ -266,6 +266,11 @@ MDres <- function(Y, Y_pred_list) {
   }
 
   u_resids <- vapply(seq_len(N), function(i) {
+    
+    if (singulars[i] || any(is.na(mds_list[[i]]))) {
+      return(NA_real_)
+    }
+    
     obs_val <- mds_list[[i]][1]
     post_vals <- mds_list[[i]][-1]
     ecdf_i <- ecdf(post_vals)
