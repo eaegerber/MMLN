@@ -2,6 +2,56 @@
 
 Tools for fitting and evaluating Mixed Effects Multinomial Logistic Normal Regression Models, with support for both fixed-effects and mixed-effects formulations. Includes utilities for data simulation, trace visualization, model comparison (DIC), posterior predictive checks, calculating squared Mahalanobis distance residuals (`MDres`) and performing Kolmogorov-Smirnov tests.
 
+## System Requirements
+
+This package includes compiled C++ code (via Rcpp) for performance-critical operations. The C++ source is compiled automatically when you install the package, but your system must have a C++ compiler available for R to use. Follow the instructions below for your operating system.
+
+### Windows
+
+Install **Rtools** before installing the package. Rtools provides the compiler toolchain that R needs on Windows.
+
+1. Download Rtools from [https://cran.r-project.org/bin/windows/Rtools/](https://cran.r-project.org/bin/windows/Rtools/)
+2. Run the installer with default settings
+3. Restart R/RStudio after installation
+
+You can verify the installation by running in R:
+
+```r
+Sys.which("make")
+# Should return a path like "C:\\rtools44\\usr\\bin\\make.exe"
+```
+
+### macOS
+
+Install the **Xcode Command Line Tools**, which include the `clang` C++ compiler:
+
+```bash
+xcode-select --install
+```
+
+Follow the prompts to complete installation. You can verify with:
+
+```bash
+clang++ --version
+```
+
+### Linux (Debian/Ubuntu)
+
+Install the `build-essential` meta-package and R development headers:
+
+```bash
+sudo apt-get install build-essential r-base-dev
+```
+
+For Fedora/RHEL-based systems, use:
+
+```bash
+sudo dnf install R-devel gcc-c++ make
+```
+
+### A Note on Numerical Precision
+
+Because the package uses compiled C++ arithmetic, results may differ from the pure-R implementation at approximately the `1e-8` level (around the 8th decimal place) depending on your operating system and compiler version. This is expected floating-point behavior and is well within acceptable tolerance, it does not indicate a bug or correctness issue.
 
 ## Installation
 
@@ -111,8 +161,8 @@ dic_res_ovd$DIC > dic_res$DIC
 
 This package includes a helper, `run_pollen_models()`, that reproduces the Gerber \& Craig (2024) pollen analysis by fitting three models to the **pollen** counts (from the **MM** package):
 
-1. **Multinomial logit** via `MGLMreg(dist = "MN")`  
-2. **Dirichlet multinomial** via `MGLMreg(dist = "DM")`  
+1. **Multinomial logit** via `MGLMreg(dist = "MN")`
+2. **Dirichlet multinomial** via `MGLMreg(dist = "DM")`
 3. **Fixed-effects MLN** via `FMLN()`
 
 It then draws replicates from the fitted model distributions and computes Mahalanobis‐residuals for each fit.
