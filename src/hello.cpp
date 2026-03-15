@@ -1,4 +1,6 @@
-#include <Rcpp.h>
+// [[Rcpp::depends(RcppArmadillo, RcppEigen)]]
+#include <RcppArmadillo.h>
+#include <RcppEigen.h>
 using namespace Rcpp;
 
 // DEV NOTE:

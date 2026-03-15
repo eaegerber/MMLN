@@ -1,4 +1,5 @@
 .Rproj.user
+*.Rproj
 correct_fit.jpeg
 incorrect_fit.jpeg
 .Rhistory

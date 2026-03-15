@@ -1,0 +1,6 @@
+# -Wno-ignored-attributes: suppresses ONLY the [-Wignored-attributes] warning class.
+# This is triggered by Eigen 3.3.x's SSE/SIMD headers under GCC 13+ / Rtools45
+# and is not actionable from our codebase — it requires a fix in Eigen itself (fixed in 3.4).
+# All other warning classes (-Wunused, -Wtype-limits, -Wsign-compare, etc.) remain active.
+# Remove this line once RcppEigen ships Eigen >= 3.4 on CRAN.
+PKG_CXXFLAGS = -Wno-ignored-attributes
