@@ -15,7 +15,7 @@ Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
 Depends: R (>= 3.5.0)
-Imports: 
+Imports:
     car,
     dplyr,
     graphics,
@@ -23,10 +23,15 @@ Imports:
     MGLM,
     mvnfast,
     stats,
-    utils
-Suggests: 
+    utils,
+    Rcpp (>= 1.0.0)
+Suggests:
     knitr,
     Lahman,
     MM,
     rmarkdown,
     testthat
+LinkingTo:
+    Rcpp,
+    RcppArmadillo,
+    RcppEigen
