@@ -95,11 +95,10 @@ FMLN <- function(Y, X, n_iter = 1000, burn_in = 0, thin = 1, mh_scale = 1, prior
       log_q_old <- apply(ymuPstar, 1, betaloglike, Sigma = mh_scale * Sigma)
       log_q_prop <- apply(ymuPstar_new, 1, betaloglike, Sigma = mh_scale * Sigma)
     } else if (proposal == "normbeta") {
-      W_new <- t(apply(ymu, 1, normbetapropdist, Sigma = mh_scale * Sigma))
-      ymuw <- cbind(ymu, W)
-      ymuw_new <- cbind(ymu, W_new)
-      log_q_old <- apply(ymuw, 1, normbetaloglike, Sigma = mh_scale * Sigma)
-      log_q_prop <- apply(ymuw_new, 1, normbetaloglike, Sigma = mh_scale * Sigma)
+      mh_update_output    <- mh_update_cpp(W, Y, Mu, mh_scale * Sigma)   # from c++ optimzations
+      W_new     <- mh_update_output$W_new
+      log_q_old <- mh_update_output$log_q_old
+      log_q_prop <- mh_update_output$log_q_new
     }
 
     W_diff <- W - Mu
@@ -280,9 +279,10 @@ MMLN <- function(Y, X, Z, n_iter = 1000, burn_in = 0, thin = 1, mh_scale = 1, pr
       log_q_old <- apply(cbind(ymu, P_old), 1, betaloglike, Sigma = mh_scale * Sigma)
       log_q_new <- apply(cbind(ymu, P_new), 1, betaloglike, Sigma = mh_scale * Sigma)
     } else {
-      W_prop    <- t(apply(ymu, 1, normbetapropdist, Sigma = mh_scale * Sigma))
-      log_q_old <- apply(cbind(ymu, W), 1, normbetaloglike, Sigma = mh_scale * Sigma)
-      log_q_new <- apply(cbind(ymu, W_prop), 1, normbetaloglike, Sigma = mh_scale * Sigma)
+      mh_update_output    <- mh_update_cpp(W, Y, Mu, mh_scale * Sigma)   # from c++ optimzations
+      W_prop    <- mh_update_output$W_new
+      log_q_old <- mh_update_output$log_q_old
+      log_q_new <- mh_update_output$log_q_new
     }
     expW   <- rowSums(exp(W)); expWp <- rowSums(exp(W_prop))
     ll_old <- rowSums(Y[,1:d] * W[,1:d]) - rowSums(Y * log1p(expW)) -
