@@ -60,7 +60,7 @@ Y_pred_list_m <- lapply(seq_along(mlb_m$w_chain), function(i) {
                               mixed = TRUE,
                               verbose = FALSE
   )
-})s
+})
 mdres_mmln_baseball_profile <- profvis({
 resids_m <- MDres(baseball_example$Y, Y_pred_list_m)
 })

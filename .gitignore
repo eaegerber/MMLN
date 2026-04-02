@@ -3,6 +3,7 @@
 correct_fit.jpeg
 incorrect_fit.jpeg
 .Rhistory
+.vscode/
 
 # Compiled C++ code
 src/*.o

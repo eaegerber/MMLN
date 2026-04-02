@@ -216,90 +216,9 @@ sample_posterior_predictive <- function(X, beta, Sigma, n,
 #'
 #' @export
 MDres <- function(Y, Y_pred_list) {
-
-  Y_obs <- compress_counts(Y)
-  alr_obs <- alr(Y_obs)
-
-  N <- nrow(Y_obs)
-  d <- ncol(Y_obs) - 1
-  P <- length(Y_pred_list)
-
-  pred_array <- array(NA, dim = c(N, d, P))
-  for (j in seq_len(P)) {
-    pred_array[,,j] <- alr(compress_counts(Y_pred_list[[j]]))
-  }
-
-  mu_all <- apply(pred_array, 1:2, mean)
-  Sigma_all <- lapply(seq_len(N), function(i) cov(t(pred_array[i,,])))
-
-  singulars <- unlist(lapply(Sigma_all, function(Sig) {
-    if (any(is.na(Sig))) {
-      return(TRUE)
-    }
-    ev <- eigen(Sig, symmetric = TRUE)$values
-    any(ev < 1e-8)
-  }))
-
-  if (any(singulars)) {
-    warning(sprintf("Covariance matrix singular for %d observations; results may be unreliable.",
-                    sum(singulars)))
-  }
-
-  mds_list <- vector("list", N)
-  if (interactive()) cat("Computing Mahalanobis distances:\n")
-  start_time <- Sys.time()
-  for (i in seq_len(N)) {
-    if (interactive() && (i %% max(1, floor(N / 100)) == 0 || i == N)) {
-      pct <- floor(100 * i / N)
-      elapsed <- Sys.time() - start_time
-      eta <- (as.numeric(elapsed) / i) * (N - i)
-      cat(sprintf("\r[%3d%%] ETA: %s", pct, format(.POSIXct(eta, tz="GMT"), "%H:%M:%S")))
-      flush.console()
-    }
-    pred_i <- t(pred_array[i,,])
-    w_obs_i <- alr_obs[i, ]
-    obsi <- rbind(w_obs_i, pred_i)
-    mds_list[[i]] <- tryCatch(
-      apply(obsi, 1, mahalanobis, center = mu_all[i,], cov = Sigma_all[[i]]),
-      error = function(e) NA
-    )
-  }
-
-  u_resids <- vapply(seq_len(N), function(i) {
-    
-    if (singulars[i] || any(is.na(mds_list[[i]]))) {
-      return(NA_real_)
-    }
-    
-    obs_val <- mds_list[[i]][1]
-    post_vals <- mds_list[[i]][-1]
-    ecdf_i <- ecdf(post_vals)
-
-    if (obs_val <= min(post_vals)) {
-      minpct <- 0
-      maxpct <- ecdf_i(min(post_vals))
-      if (maxpct == 0) maxpct <- (length(post_vals) - 1) / length(post_vals)
-    } else if (obs_val > max(post_vals)) {
-      minpct <- ecdf_i(max(post_vals))
-      maxpct <- 1
-      if (minpct == 1) minpct <- (length(post_vals) - 1) / length(post_vals)
-    } else {
-      sorted_vals <- sort(post_vals)
-      lower <- max(which(sorted_vals < obs_val))
-      minpct <- ecdf_i(sorted_vals[lower])
-      maxpct <- ecdf_i(obs_val)
-      if (minpct == 1) minpct <- (length(post_vals) - 1) / length(post_vals)
-      if (maxpct == 0) maxpct <- (length(post_vals) - 1) / length(post_vals)
-    }
-
-    runif(1, minpct, maxpct)
-  }, numeric(1))
-
-  z_resids <- qnorm(u_resids)
-
+  z_resids <- mdres_core_cpp(Y, Y_pred_list)
   class(z_resids) <- "mdres"
   return(z_resids)
-
 }
 
 

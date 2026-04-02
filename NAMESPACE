@@ -3,6 +3,7 @@
 S3method(summary,mdres)
 export(FMLN)
 export(MDres)
+export(mdres_core_cpp)
 export(MMLN)
 export(alr)
 export(alr_inv)
