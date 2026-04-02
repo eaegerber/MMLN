@@ -97,7 +97,9 @@ Rcpp::NumericVector mdres_core_cpp(
         // collect P ALR-transformed predictive samples into P x d matrix
         arma::mat samp(P, d);
         for (int k = 0; k < P; ++k)
+        {
             samp.row(k) = pred_cube.slice(k).row(i);
+        }
 
         // per-observation sample covariance via arma::cov (divides by P-1,
         // matching R cov())
@@ -107,7 +109,9 @@ Rcpp::NumericVector mdres_core_cpp(
         // singularity check: count obs where min eigenvalue < 1e-8
         const arma::vec ev = arma::eig_sym(S);
         if (ev.min() < 1e-8)
+        {
             ++n_singular;
+        }
 
         // diagonal jitter for numerical stability before Cholesky
         S.diag() += 1e-8;
@@ -147,7 +151,9 @@ Rcpp::NumericVector mdres_core_cpp(
         // no intermediate matrix allocated
         Eigen::MatrixXd centered(P + 1, d);
         for (int j = 0; j < d; ++j)
+        {
             centered(0, j) = alr_obs(i, j) - mu(j);
+        }
         centered.bottomRows(P).noalias() = samp_eig.rowwise() - mu_eig;
 
         // row-wise Mahalanobis distances via a single triangular solve:
@@ -169,7 +175,9 @@ Rcpp::NumericVector mdres_core_cpp(
         // std::sort is O(P log P), then binary search is O(log P) per query
         std::vector<double> sorted_post(P);
         for (int k = 0; k < P; ++k)
+        {
             sorted_post[k] = mds(k + 1);
+        }
         std::sort(sorted_post.begin(), sorted_post.end());
 
         const double min_val = sorted_post.front();
