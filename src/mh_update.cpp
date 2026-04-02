@@ -1,20 +1,10 @@
 // [[Rcpp::depends(RcppArmadillo)]]
-// [[Rcpp::plugins(openmp)]]
-#include <RcppArmadillo.h> // for matrix/vector types
-
-// NOTE: OpenMP is not configured yet
-// The guards are here for future multi-threaded parallel execution
-// When OpenMP is available, the parallel phase of mh_update_normbeta_cpp will
-// automatically distribute the N observations across CPU cores
-#ifdef _OPENMP
-#include <omp.h>
-#endif
+#include <RcppArmadillo.h>
 #include <cmath>
 
 // Helper function that computes normal-approximation-to-Beta proposal parameters
 // for a single (observation, dimension) pair.
-// Uses R::digamma / R::trigamma (R's internal C functions) which are NOT THREAD-SAFE
-// do not call this in a parallel execution region.
+// Uses R::digamma / R::trigamma which are R's internal C functions.
 static inline void normbeta_params(
     double y_i,      // count for category i
     double y_ref,    // count for reference (last) category
@@ -57,10 +47,9 @@ Rcpp::List mh_update_normbeta_cpp(
     const int N = static_cast<int>(W.n_rows); // num observations
     const int d = static_cast<int>(W.n_cols); // num outcome categories - 1
 
-    const arma::vec sigma_diag = Sigma.diag(); // only diagonal elements used (no need to work on full matrix)
+    const arma::vec sigma_diag = Sigma.diag(); // only diagonal elements used
 
-    // Pre-computation phase (not thread-safe)
-    // operational matrices
+    // Compute proposal parameters and random draws
     arma::mat muprop_mat(N, d);
     arma::mat sigprop_mat(N, d);
     arma::mat Z_mat(N, d);
@@ -70,7 +59,6 @@ Rcpp::List mh_update_normbeta_cpp(
         const double y_ref = Y(i, d); // reference-category count (last column)
         for (int j = 0; j < d; j++)
         {
-            // building proposal distribution parameters
             normbeta_params(
                 Y(i, j), y_ref, Mu(i, j), sigma_diag(j),
                 muprop_mat(i, j), sigprop_mat(i, j));
@@ -78,51 +66,34 @@ Rcpp::List mh_update_normbeta_cpp(
         }
     }
 
-    // Parallel computation phase (pure C++ math, thread-safe)
-    // output variables
+    // Compute proposals and log-densities
     arma::mat W_new(N, d);
     arma::vec log_q_old(N);
     arma::vec log_q_new(N);
 
-    const double log_sqrt_2pi = 0.5 * std::log(2.0 * M_PI); // precompute to be reused in loop
+    const double log_sqrt_2pi = 0.5 * std::log(2.0 * M_PI);
 
-// Only runs in parallel if running machine has OpenMP setup,
-// ignores and runs single threaded if not
-#ifdef _OPENMP
-#pragma omp parallel for schedule(static)
-#endif
     for (int i = 0; i < N; i++)
     {
         double lq_old = 0.0;
         double lq_new = 0.0;
         for (int j = 0; j < d; j++)
         {
-            // pre-computed proposal mean, sd, and random draw for this obs/dim
             const double mp = muprop_mat(i, j);
             const double sp = sigprop_mat(i, j);
             const double z = Z_mat(i, j);
 
             // proposed value: W_new = mp + sp * z
-            // generate proposed value by shifting proposed mean by z
             W_new(i, j) = mp + sp * z;
 
             // log dnorm(W_old | mp, sp)
-            // distance from current value (old) from the proposed center
             const double dev_old = (W(i, j) - mp) / sp;
             lq_old += -log_sqrt_2pi - std::log(sp) - 0.5 * dev_old * dev_old;
 
-            // log dnorm(W_new | mp, sp) — (W_new - mp)/sp == z by construction
-            // formula for lq_new:
-            // -log_sqrt_2pi - log(sp) - 0.5 * ((W_new - mp) / sp)^2
-            //
-            // Since W_new = mp + sp * z;
-            // (W_new - mp) / sp = (mp + sp * z - mp) / sp = sp*z / sp = z
-            //
-            // so formula simplifies to:
-            // -log_sqrt_2pi - log(sp) - 0.5 * z^2
+            // log dnorm(W_new | mp, sp)
+            // Since W_new = mp + sp * z, we have (W_new - mp)/sp = z, so:
             lq_new += -log_sqrt_2pi - std::log(sp) - 0.5 * z * z;
         }
-        // to be used in MMLN/FMLN for MH accept/reject decision
         log_q_old(i) = lq_old;
         log_q_new(i) = lq_new;
     }
@@ -193,7 +164,7 @@ static inline void beta_params(
 // Combining the log(pstar) and log(1-pstar) terms:
 //   = a_star*log(pstar) + b_star*log(1-pstar) - lbeta(a_star, b_star)
 //
-// This simplified form is what we compute in the parallel loop.
+// This simplified form is what we compute below.
 //
 // @param W     N x d matrix of current latent log-ratio values.
 // @param Y     N x (d+1) matrix of multinomial counts.
@@ -214,28 +185,19 @@ Rcpp::List mh_update_beta_cpp(
 
     const arma::vec sigma_diag = Sigma.diag();
 
-    // ── Sequential pre-computation phase ──
-    // R::rbeta and R::lbeta call into R's C internals and are NOT thread-safe,
-    // so all calls to them happen here before any parallel region.
-
-    // a_star, b_star: Beta shape parameters for each (obs, dim) pair
+    // Precompute shape parameters, sigmoid of current W, Beta draws,
+    // and lbeta values. R::rbeta and R::lbeta are R C internals.
     arma::mat a_star_mat(N, d);
     arma::mat b_star_mat(N, d);
-
-    // Pstar_old: sigmoid of current W values
-    // Pstar_new: Beta proposal draws
     arma::mat Pstar_old(N, d);
     arma::mat Pstar_new(N, d);
-
-    // lbeta_mat: precomputed log-Beta function values for the parallel phase
     arma::mat lbeta_mat(N, d);
 
     for (int i = 0; i < N; i++)
     {
-        const double y_ref = Y(i, d); // reference category count (last column)
+        const double y_ref = Y(i, d);
         for (int j = 0; j < d; j++)
         {
-            // compute proposal shape parameters
             beta_params(
                 Y(i, j), y_ref, Mu(i, j), sigma_diag(j),
                 a_star_mat(i, j), b_star_mat(i, j));
@@ -247,19 +209,16 @@ Rcpp::List mh_update_beta_cpp(
             // draw from Beta proposal
             Pstar_new(i, j) = R::rbeta(a_star_mat(i, j), b_star_mat(i, j));
 
-            // precompute lbeta for use in the parallel log-density calculation
+            // precompute lbeta for use in log-density calculation
             lbeta_mat(i, j) = R::lbeta(a_star_mat(i, j), b_star_mat(i, j));
         }
     }
 
-    // ── Parallel computation phase (pure C++ math, thread-safe) ──
+    // Compute W_new (logit of Pstar_new) and log-densities
     arma::mat W_new(N, d);
     arma::vec log_q_old(N);
     arma::vec log_q_new(N);
 
-#ifdef _OPENMP
-#pragma omp parallel for schedule(static)
-#endif
     for (int i = 0; i < N; i++)
     {
         double lq_old = 0.0;
@@ -277,7 +236,7 @@ Rcpp::List mh_update_beta_cpp(
             // w = log(pstar / (1 - pstar))
             W_new(i, j) = std::log(ps_new / (1.0 - ps_new));
 
-            // Log proposal density (see derivation in the function header):
+            // Log proposal density (see derivation in function header):
             //   log q(pstar) = a_star * log(pstar) + b_star * log(1 - pstar) - lbeta(a_star, b_star)
             lq_old += a * std::log(ps_old) + b * std::log(1.0 - ps_old) - lb;
             lq_new += a * std::log(ps_new) + b * std::log(1.0 - ps_new) - lb;
