@@ -285,7 +285,7 @@ MMLN <- function(Y, X, Z, n_iter = 1000, burn_in = 0, thin = 1, mh_scale = 1, pr
       0.5 * rowSums((W - Mu) %*% Sigma_inv * (W - Mu))
     ll_new <- rowSums(Y[,1:d] * W_prop[,1:d]) - rowSums(Y * log1p(expWp)) -
       0.5 * rowSums((W_prop - Mu) %*% Sigma_inv * (W_prop - Mu))
-    ratio  <- ll_new - ll_old + log_q_new - log_q_old
+    ratio  <- ll_new - ll_old + log_q_old - log_q_new
     if(!warned_na_ratio && anyNA(ratio)) {
       warning("NA detected in MH acceptance ratio; these proposals will be rejected.")
       warned_na_ratio <- TRUE
