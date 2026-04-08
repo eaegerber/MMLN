@@ -106,6 +106,21 @@ Rcpp::NumericVector mdres_core_cpp(
         // replaces R: Sigma_all[[i]] <- cov(t(pred_array[i,,]))
         arma::mat S = arma::cov(samp); // d x d
 
+        // If predictive samples are degenerate (e.g. all-zero counts that
+        // produce NaN after log-ratio transform), the covariance will contain
+        // NaN/Inf. Skip these observations and return NA.
+        if (!S.is_finite())
+        {
+            z_resids[i] = NA_REAL;
+            ++n_singular;
+            continue;
+        }
+
+        // arma::cov can produce tiny asymmetries from floating-point
+        // rounding, which makes eig_sym() reject the matrix. Force
+        // exact symmetry: S = (S + S^T) / 2
+        S = (S + S.t()) / 2.0;
+
         // singularity check: count obs where min eigenvalue < 1e-8
         const arma::vec ev = arma::eig_sym(S);
         if (ev.min() < 1e-8)

@@ -87,15 +87,12 @@ FMLN <- function(Y, X, n_iter = 1000, burn_in = 0, thin = 1, mh_scale = 1, prior
       log_q_old <- rep(0, N)
       log_q_prop <- rep(0, N)
     } else if (proposal == "beta") {
-      Pstar <- t(apply(W, 1, ytopstar))
-      Pstar_new <- t(apply(ymu, 1, betapropdist, Sigma = mh_scale * Sigma))
-      W_new <- t(apply(Pstar_new, 1, pstartoy))
-      ymuPstar <- cbind(ymu, Pstar)
-      ymuPstar_new <- cbind(ymu, Pstar_new)
-      log_q_old <- apply(ymuPstar, 1, betaloglike, Sigma = mh_scale * Sigma)
-      log_q_prop <- apply(ymuPstar_new, 1, betaloglike, Sigma = mh_scale * Sigma)
+      mh_update_output <- mh_update_beta_cpp(W, Y, Mu, mh_scale * Sigma)
+      W_new      <- mh_update_output$W_new
+      log_q_old  <- mh_update_output$log_q_old
+      log_q_prop <- mh_update_output$log_q_new
     } else if (proposal == "normbeta") {
-      mh_update_output    <- mh_update_cpp(W, Y, Mu, mh_scale * Sigma)   # from c++ optimzations
+      mh_update_output    <- mh_update_normbeta_cpp(W, Y, Mu, mh_scale * Sigma)
       W_new     <- mh_update_output$W_new
       log_q_old <- mh_update_output$log_q_old
       log_q_prop <- mh_update_output$log_q_new
@@ -273,13 +270,12 @@ MMLN <- function(Y, X, Z, n_iter = 1000, burn_in = 0, thin = 1, mh_scale = 1, pr
       W_prop    <- W + mvnfast::rmvn(N, mu = rep(0, d), sigma = mh_scale * Sigma)
       log_q_old <- log_q_new <- rep(0, N)
     } else if(proposal == "beta") {
-      P_old     <- t(apply(W, 1, ytopstar))
-      P_new     <- t(apply(ymu, 1, betapropdist, Sigma = mh_scale * Sigma))
-      W_prop    <- t(apply(P_new, 1, pstartoy))
-      log_q_old <- apply(cbind(ymu, P_old), 1, betaloglike, Sigma = mh_scale * Sigma)
-      log_q_new <- apply(cbind(ymu, P_new), 1, betaloglike, Sigma = mh_scale * Sigma)
+      mh_update_output <- mh_update_beta_cpp(W, Y, Mu, mh_scale * Sigma)
+      W_prop    <- mh_update_output$W_new
+      log_q_old <- mh_update_output$log_q_old
+      log_q_new <- mh_update_output$log_q_new
     } else {
-      mh_update_output    <- mh_update_cpp(W, Y, Mu, mh_scale * Sigma)   # from c++ optimzations
+      mh_update_output    <- mh_update_normbeta_cpp(W, Y, Mu, mh_scale * Sigma)
       W_prop    <- mh_update_output$W_new
       log_q_old <- mh_update_output$log_q_old
       log_q_new <- mh_update_output$log_q_new
@@ -289,7 +285,7 @@ MMLN <- function(Y, X, Z, n_iter = 1000, burn_in = 0, thin = 1, mh_scale = 1, pr
       0.5 * rowSums((W - Mu) %*% Sigma_inv * (W - Mu))
     ll_new <- rowSums(Y[,1:d] * W_prop[,1:d]) - rowSums(Y * log1p(expWp)) -
       0.5 * rowSums((W_prop - Mu) %*% Sigma_inv * (W_prop - Mu))
-    ratio  <- ll_new - ll_old + log_q_new - log_q_old
+    ratio  <- ll_new - ll_old + log_q_old - log_q_new
     if(!warned_na_ratio && anyNA(ratio)) {
       warning("NA detected in MH acceptance ratio; these proposals will be rejected.")
       warned_na_ratio <- TRUE
