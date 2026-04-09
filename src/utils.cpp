@@ -13,6 +13,13 @@ typedef arma::uvec UVec;
 
 // Some mock utility functions, may be removed in the future or could be used.
 
+// Verify that the C++ backend is active and callable from R
+// [[Rcpp::export]]
+void verify_installation()
+{
+  Rcpp::Rcout << "C++ is working w/ Rcpp" << std::endl;
+}
+
 // Clamp each element of a vector to [lo, hi], using RcppArmadillo
 // [[Rcpp::export]]
 arma::vec clamp_vec(arma::vec x, double lo, double hi)
