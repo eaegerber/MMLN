@@ -4,8 +4,6 @@
 
 MMLN is an R package for fitting **Mixed Effects Multinomial Logistic Normal (MLN) Regression Models**. It provides Gibbs samplers for both fixed-effects (`FMLN`) and mixed-effects (`MMLN`) formulations, along with model diagnostics via Mahalanobis distance residuals.
 
-This repository is a **performance-optimized fork** of [eaegerber/MMLN](https://github.com/eaegerber/MMLN). The upstream package is pure R; this fork migrates performance-critical inner loops to C++ via Rcpp while preserving numerical equivalence with the original implementation.
-
 ## Repository Structure
 
 ```
@@ -36,15 +34,15 @@ MMLN/
 └── profiling/                     # Performance profiling reports (HTML)
 ```
 
-## Fork Contribution
+## C++ Performance Layer
 
-The original MMLN package implemented all computation in pure R. Profiling on the MLB baseball dataset revealed that the **Metropolis-Hastings proposal updates** and **Mahalanobis distance residual computation** dominated runtime. This fork:
+Profiling on the MLB baseball dataset identified **Metropolis-Hastings proposal updates** and **Mahalanobis distance residual computation** as the dominant runtime bottlenecks. These paths are implemented in compiled C++ via Rcpp:
 
-1. **Ported the MH proposal step to C++** — both the normal-approximation-to-Beta (`mh_update_normbeta_cpp`) and the Beta proposal (`mh_update_beta_cpp`) now run as compiled Rcpp functions, eliminating per-iteration R interpreter overhead across `N × d` element-wise operations.
-2. **Ported MDres computation to C++** — the `mdres_core_cpp` function handles the full residual pipeline (count compression, ALR transform, per-observation covariance estimation, Cholesky solve, Mahalanobis distances, and quantile-residual inversion) in a single compiled pass.
-3. **Added shared C++ utilities** — `clamp_vec`, `col_means`, `sym_eigenvalues` provide reusable building blocks.
+- `mh_update_normbeta_cpp` and `mh_update_beta_cpp` — MH proposals across all `N × d` elements per iteration
+- `mdres_core_cpp` — full residual pipeline in a single compiled pass (count compression, ALR transform, covariance estimation, Cholesky solve, Mahalanobis distances, quantile-residual inversion)
+- `clamp_vec`, `col_means`, `sym_eigenvalues` — shared utilities in `utils.cpp`
 
-Numerical results match the upstream pure-R implementation to within `~1e-8` (single C++ operation tolerance) per iteration, with cumulative MCMC chain drift bounded at `~1e-6` over 1000 iterations.
+Numerical precision: results match a pure-R reference implementation to within `~1e-8` per operation, with cumulative MCMC chain drift bounded at `~1e-6` over 1000 iterations.
 
 ## R Layer
 
@@ -81,10 +79,10 @@ All C++ source lives in `src/` and is compiled into a shared library (`MMLN.so`)
 
 Two proposal strategies for updating the latent log-ratio matrix **W**:
 
-| Function | Strategy | How it works |
-|---|---|---|
+| Function                 | Strategy              | How it works                                                                                                                        |
+| ------------------------ | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `mh_update_normbeta_cpp` | Normal approx to Beta | Computes Beta shape parameters from prior + data, uses digamma/trigamma to find the mode and variance, draws from a Normal proposal |
-| `mh_update_beta_cpp` | Beta in sigmoid space | Maps W through sigmoid, draws new probabilities from Beta(a*, b*), maps back via logit with Jacobian correction |
+| `mh_update_beta_cpp`     | Beta in sigmoid space | Maps W through sigmoid, draws new probabilities from Beta(a*, b*), maps back via logit with Jacobian correction                     |
 
 Both iterate over all `N × d` elements, computing per-element proposal densities. The accept/reject decision itself remains in R (it depends on the full log-likelihood and prior).
 
@@ -113,35 +111,35 @@ User-facing R functions like `FMLN()`, `MMLN()`, and `MDres()` delegate to C++ b
 
 ## Rcpp Sub-Libraries
 
-| Library | Role | Where used |
-|---|---|---|
-| **Rcpp** | R ↔ C++ type marshalling (`NumericMatrix`, `List`, etc.) | All `.cpp` files |
+| Library           | Role                                                                             | Where used                                     |
+| ----------------- | -------------------------------------------------------------------------------- | ---------------------------------------------- |
+| **Rcpp**          | R ↔ C++ type marshalling (`NumericMatrix`, `List`, etc.)                         | All `.cpp` files                               |
 | **RcppArmadillo** | Armadillo linear algebra (`arma::mat`, `arma::cov`, `arma::chol`, `arma::clamp`) | `mh_update.cpp`, `mdres_core.cpp`, `utils.cpp` |
-| **RcppEigen** | Eigen linear algebra (`SelfAdjointEigenSolver` for eigenvalue checks) | `utils.cpp` |
+| **RcppEigen**     | Eigen linear algebra (`SelfAdjointEigenSolver` for eigenvalue checks)            | `mdres_core.cpp`, `utils.cpp`                  |
 
 Both are declared in `LinkingTo:` in DESCRIPTION. `src/Makevars` links LAPACK/BLAS and suppresses Eigen SSE/SIMD warnings.
 
 ## Optimization Testing Infrastructure
 
-The `optimization-testing/` directory contains an end-to-end comparison suite that verifies the C++ fork produces numerically equivalent results to the upstream pure-R package.
+The `optimization-testing/` directory contains an end-to-end comparison suite that verifies the C++ implementation produces numerically equivalent results to a pure-R reference implementation.
 
 **Pipeline** (orchestrated by `Makefile`):
 
 1. **`generate_data.R`** — creates 10 synthetic datasets from `config.R` scenario definitions
 2. **`generate_reference.R`** — installs the upstream package, runs FMLN/MMLN/MDres, saves fixture outputs
-3. **`run_test.R`** — installs the fork, runs the same models on the same data
-4. **`compare.R`** — statistically compares fork vs upstream outputs against defined tolerances
+3. **`run_test.R`** — runs the same models on the same data using the C++ implementation
+4. **`compare.R`** — statistically compares C++ vs reference outputs against defined tolerances
 
 **Scenarios** stress different numerical edge cases: zero cells, tiny/large counts, high dimensionality (d=8), near-singular covariance (ρ=0.92), large coefficients (overflow risk), unbalanced groups (n=1..80), many groups (m=500), and dominant categories (~90% probability mass).
 
 **Tolerance tiers:**
 
-| Constant | Value | Scope |
-|---|---|---|
-| `TOL_EXACT` | 0 | Pure-R proposal paths must be bitwise identical |
-| `TOL_FLOAT` | 1e-8 | Single C++ operation vs R |
-| `TOL_CHAIN` | 1e-6 | Cumulative drift over 1000 MCMC iterations |
-| `TOL_ACCEPT` | 1e-10 | Acceptance ratio precision |
-| `TOL_MDRES` | 1e-6 | MDres downstream from chain differences |
+| Constant     | Value | Scope                                           |
+| ------------ | ----- | ----------------------------------------------- |
+| `TOL_EXACT`  | 0     | Pure-R proposal paths must be bitwise identical |
+| `TOL_FLOAT`  | 1e-8  | Single C++ operation vs R                       |
+| `TOL_CHAIN`  | 1e-6  | Cumulative drift over 1000 MCMC iterations      |
+| `TOL_ACCEPT` | 1e-10 | Acceptance ratio precision                      |
+| `TOL_MDRES`  | 1e-6  | MDres downstream from chain differences         |
 
 Reference fixtures and test results must be generated on the same machine due to cross-platform LAPACK non-determinism (documented in `CROSS_PLATFORM_DIVERGENCE.md`).
