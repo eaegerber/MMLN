@@ -4,6 +4,8 @@ correct_fit.jpeg
 incorrect_fit.jpeg
 .Rhistory
 .vscode/
+.DS_Store
+testing/*.RData
 
 # Compiled C++ code
 src/*.o
