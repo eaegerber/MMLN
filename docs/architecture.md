@@ -40,7 +40,6 @@ Profiling on the MLB baseball dataset identified **Metropolis-Hastings proposal 
 
 - `mh_update_normbeta_cpp` and `mh_update_beta_cpp` — MH proposals across all `N × d` elements per iteration
 - `mdres_core_cpp` — full residual pipeline in a single compiled pass (count compression, ALR transform, covariance estimation, Cholesky solve, Mahalanobis distances, quantile-residual inversion)
-- `clamp_vec`, `col_means`, `sym_eigenvalues` — shared utilities in `utils.cpp`
 
 Numerical precision: results match a pure-R reference implementation to within `~1e-8` per operation, with cumulative MCMC chain drift bounded at `~1e-6` over 1000 iterations.
 
@@ -98,12 +97,6 @@ Per-observation pipeline:
 6. Compute Mahalanobis distance: `‖L⁻¹(x - μ)‖²`
 7. Binary-search ECDF to find quantile rank among predictive distances
 8. Invert to standard normal via randomized quantile residual
-
-### `utils.cpp` — Shared Utilities
-
-- `clamp_vec(x, lo, hi)` — element-wise clamping (Armadillo)
-- `col_means(X)` — column means (Armadillo)
-- `sym_eigenvalues(X)` — eigenvalues of symmetric matrix (Eigen)
 
 ## How C++ Fits into R with Rcpp
 
