@@ -209,7 +209,7 @@ normbetapropdist <- function(YMu_vec, Sigma) {
   mu_vec <- YMu_vec[(k+2):length(YMu_vec)]
   result <- numeric(length = k)
   for (i in 1:k) {
-    alpha <- ((1 + exp(mu_vec[i])) / Sigma[i, i]) - (exp(mu_vec[i]) / (1 + exp(mu_vec[i])))
+    alpha <- ((1 + exp(mu_vec[i])) / Sigma[i, i]) - (1 / (1 + exp(-mu_vec[i])))
     beta <- alpha * exp(-mu_vec[i])
     alpha_star <- y_vec[i] + alpha
     beta_star <- y_vec[k + 1] + beta
@@ -242,7 +242,7 @@ normbetaloglike <- function(YMuW_vec, Sigma) {
   w_vec <- YMuW_vec[(2*k+2):length(YMuW_vec)]
   result <- 0
   for (i in 1:k) {
-    alpha <- ((1 + exp(mu_vec[i])) / Sigma[i, i]) - (exp(mu_vec[i]) / (1 + exp(mu_vec[i])))
+    alpha <- ((1 + exp(mu_vec[i])) / Sigma[i, i]) - (1 / (1 + exp(-mu_vec[i])))
     beta <- alpha * exp(-mu_vec[i])
     alpha_star <- y_vec[i] + alpha
     beta_star <- y_vec[k + 1] + beta
