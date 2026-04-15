@@ -253,6 +253,12 @@ MMLN <- function(Y, X, Z, n_iter = 1000, burn_in = 0, thin = 1, mh_scale = 1, pr
   Sigma_inv <- chol2inv(chol(Sigma))
   S_xx_inv  <- chol2inv(chol(crossprod(X)))
 
+  # pre-compute group membership indices once (Z is constant across iterations)
+  group_indices <- lapply(seq_len(m), function(j) which(Z[, j] == 1))
+  group_sizes   <- lengths(group_indices)
+  unique_sizes  <- unique(group_sizes)
+
+
   warned_na_ratio <- FALSE
   if(verbose) {
     pb <- txtProgressBar(min = 0, max = n_iter, style = 3)
@@ -301,17 +307,27 @@ MMLN <- function(Y, X, Z, n_iter = 1000, burn_in = 0, thin = 1, mh_scale = 1, pr
     W[is.na(W)] <- 0
 
     # update random intercepts psi_j
-    R_tot <- W - X %*% beta
+    R_tot   <- W - X %*% beta
+    Phi_inv <- chol2inv(chol(Phi))
+
+    # V_j depends only on group size; compute once per unique size (not once per group)
+    V_by_size <- setNames(
+      lapply(unique_sizes, function(n) chol2inv(chol(Phi_inv + n * Sigma_inv))),
+      as.character(unique_sizes)
+    )
+
+    # group indices pre-computed outside MCMC loop; M_j uses upstream column-vector
+    # formula for bit-exact arithmetic; V_j reused from cache above
     for(j in seq_len(m)) {
-      idx <- which(Z[, j] == 1)
-      R_j <- R_tot[idx, , drop = FALSE]
-      V_j <- chol2inv(chol(chol2inv(chol(Phi)) + length(idx) * Sigma_inv))
-      M_j <- V_j %*% (Sigma_inv %*% colSums(R_j))
+      R_j      <- R_tot[group_indices[[j]], , drop = FALSE]
+      V_j      <- V_by_size[[as.character(group_sizes[j])]]
+      M_j      <- V_j %*% (Sigma_inv %*% colSums(R_j))
+
+      # This line is the slowest part, but the RNG chain get's reset for each j
+      # so the result would be different, but both valid randomness
       psi[j, ] <- mvnfast::rmvn(1, mu = as.vector(M_j), sigma = V_j)
     }
 
-    # update Phi
-    S_psi <- t(psi) %*% psi
 
     # Running into non positive-definite issues, so let's try jittering    
     S1 <- prior_settings$Lambda_P + S_psi
