@@ -154,10 +154,10 @@ FMLN <- function(Y, X, n_iter = 1000, burn_in = 0, thin = 1, mh_scale = 1, prior
       eta_sec     <- elapsed_sec / i * (n_iter - i)
 
       h <- floor(eta_sec / 3600)
-      m <- floor((eta_sec %% 3600) / 60)
+      mn <- floor((eta_sec %% 3600) / 60)
       s <- round(eta_sec %% 60)
 
-      eta_str <- sprintf("%02d:%02d:%02d", h, m, s)
+      eta_str <- sprintf("%02d:%02d:%02d", h, mn, s)
       cat(sprintf("\r ETA: %s", eta_str))
       flush.console()
     }
@@ -371,10 +371,10 @@ MMLN <- function(Y, X, Z, n_iter = 1000, burn_in = 0, thin = 1, mh_scale = 1, pr
       eta_sec     <- elapsed_sec / it * (n_iter - it)
 
       h <- floor(eta_sec / 3600)
-      m <- floor((eta_sec %% 3600) / 60)
+      mn <- floor((eta_sec %% 3600) / 60)
       s <- round(eta_sec %% 60)
 
-      eta_str <- sprintf("%02d:%02d:%02d", h, m, s)
+      eta_str <- sprintf("%02d:%02d:%02d", h, mn, s)
       cat(sprintf("\r ETA: %s", eta_str))
       flush.console()
     }

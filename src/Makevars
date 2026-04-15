@@ -4,3 +4,4 @@
 # All other warning classes (-Wunused, -Wtype-limits, -Wsign-compare, etc.) remain active.
 # Remove this line once RcppEigen ships Eigen >= 3.4 on CRAN.
 PKG_CXXFLAGS = -Wno-ignored-attributes
+PKG_LIBS = $(LAPACK_LIBS) $(BLAS_LIBS)

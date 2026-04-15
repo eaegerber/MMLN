@@ -32,6 +32,17 @@ devtools::install_github("eaegerber/MMLN")
 devtools::install("/path/to/MMLN")
 ```
 
+### Building from a Local Clone
+
+If you cloned this repository and are installing from source, you must first generate the Rcpp bridge files before installing. These files are auto-generated and not tracked in git:
+
+```r
+Rcpp::compileAttributes("/path/to/MMLN")
+devtools::install("/path/to/MMLN")
+```
+
+Without this step, C++ functions like `mh_update_cpp()` will not be available and you’ll see `could not find function` errors.
+
 ## Core Workflow
 
 The typical workflow has three stages: prepare your data, fit a model, and evaluate the fit. Every function mentioned below is exported and documented. Run `?function_name` in R for full details.

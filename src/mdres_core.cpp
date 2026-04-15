@@ -125,7 +125,9 @@ Rcpp::NumericVector mdres_core_cpp(
         const arma::vec ev = arma::eig_sym(S);
         if (ev.min() < 1e-8)
         {
+            z_resids[i] = NA_REAL;
             ++n_singular;
+            continue;
         }
 
         // diagonal jitter for numerical stability before Cholesky
@@ -136,15 +138,12 @@ Rcpp::NumericVector mdres_core_cpp(
             Eigen::Map<const Eigen::MatrixXd>(S.memptr(), d, d);
 
         // Cholesky factorization: S = L L^T
-        // replaces R: solve(Sigma_all[[i]]) and chol2inv(chol(...))
+        // replaces R: apply(obsi, 1, mahalanobis, center=mu, cov=S)
         Eigen::LLT<Eigen::MatrixXd> llt(S_eig);
         if (llt.info() != Eigen::Success)
         {
-            Rcpp::warning(
-                "LLT decomposition failed for observation %d; "
-                "result set to NA.",
-                i + 1);
             z_resids[i] = NA_REAL;
+            ++n_singular;
             continue;
         }
 
@@ -248,8 +247,7 @@ Rcpp::NumericVector mdres_core_cpp(
     if (n_singular > 0)
     {
         Rcpp::warning(
-            "Covariance matrix near-singular (min eigenvalue < 1e-8) for "
-            "%d observation(s); 1e-8 diagonal jitter was applied.",
+             "Covariance matrix singular for %d observation(s); results may be unreliable.",
             n_singular);
     }
 
