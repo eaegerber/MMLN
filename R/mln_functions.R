@@ -328,6 +328,8 @@ MMLN <- function(Y, X, Z, n_iter = 1000, burn_in = 0, thin = 1, mh_scale = 1, pr
       psi[j, ] <- mvnfast::rmvn(1, mu = as.vector(M_j), sigma = V_j)
     }
 
+    # update Phi
+    S_psi <- t(psi) %*% psi
 
     # Running into non positive-definite issues, so let's try jittering    
     S1 <- prior_settings$Lambda_P + S_psi
