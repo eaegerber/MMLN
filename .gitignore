@@ -1,4 +1,17 @@
 .Rproj.user
+*.Rproj
 correct_fit.jpeg
 incorrect_fit.jpeg
 .Rhistory
+.vscode/
+.DS_Store
+testing/*.RData
+
+# Compiled C++ code
+src/*.o
+src/*.so
+src/*.dll
+
+# Rcpp auto-generated files
+src/RcppExports.cpp
+R/RcppExports.R

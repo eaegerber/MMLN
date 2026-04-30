@@ -87,19 +87,15 @@ FMLN <- function(Y, X, n_iter = 1000, burn_in = 0, thin = 1, mh_scale = 1, prior
       log_q_old <- rep(0, N)
       log_q_prop <- rep(0, N)
     } else if (proposal == "beta") {
-      Pstar <- t(apply(W, 1, ytopstar))
-      Pstar_new <- t(apply(ymu, 1, betapropdist, Sigma = mh_scale * Sigma))
-      W_new <- t(apply(Pstar_new, 1, pstartoy))
-      ymuPstar <- cbind(ymu, Pstar)
-      ymuPstar_new <- cbind(ymu, Pstar_new)
-      log_q_old <- apply(ymuPstar, 1, betaloglike, Sigma = mh_scale * Sigma)
-      log_q_prop <- apply(ymuPstar_new, 1, betaloglike, Sigma = mh_scale * Sigma)
+      mh_update_output <- mh_update_beta_cpp(W, Y, Mu, mh_scale * Sigma)
+      W_new      <- mh_update_output$W_new
+      log_q_old  <- mh_update_output$log_q_old
+      log_q_prop <- mh_update_output$log_q_new
     } else if (proposal == "normbeta") {
-      W_new <- t(apply(ymu, 1, normbetapropdist, Sigma = mh_scale * Sigma))
-      ymuw <- cbind(ymu, W)
-      ymuw_new <- cbind(ymu, W_new)
-      log_q_old <- apply(ymuw, 1, normbetaloglike, Sigma = mh_scale * Sigma)
-      log_q_prop <- apply(ymuw_new, 1, normbetaloglike, Sigma = mh_scale * Sigma)
+      mh_update_output    <- mh_update_normbeta_cpp(W, Y, Mu, mh_scale * Sigma)
+      W_new     <- mh_update_output$W_new
+      log_q_old <- mh_update_output$log_q_old
+      log_q_prop <- mh_update_output$log_q_new
     }
 
     W_diff <- W - Mu
@@ -158,10 +154,10 @@ FMLN <- function(Y, X, n_iter = 1000, burn_in = 0, thin = 1, mh_scale = 1, prior
       eta_sec     <- elapsed_sec / i * (n_iter - i)
 
       h <- floor(eta_sec / 3600)
-      m <- floor((eta_sec %% 3600) / 60)
+      mn <- floor((eta_sec %% 3600) / 60)
       s <- round(eta_sec %% 60)
 
-      eta_str <- sprintf("%02d:%02d:%02d", h, m, s)
+      eta_str <- sprintf("%02d:%02d:%02d", h, mn, s)
       cat(sprintf("\r ETA: %s", eta_str))
       flush.console()
     }
@@ -257,6 +253,12 @@ MMLN <- function(Y, X, Z, n_iter = 1000, burn_in = 0, thin = 1, mh_scale = 1, pr
   Sigma_inv <- chol2inv(chol(Sigma))
   S_xx_inv  <- chol2inv(chol(crossprod(X)))
 
+  # pre-compute group membership indices once (Z is constant across iterations)
+  group_indices <- lapply(seq_len(m), function(j) which(Z[, j] == 1))
+  group_sizes   <- lengths(group_indices)
+  unique_sizes  <- unique(group_sizes)
+
+
   warned_na_ratio <- FALSE
   if(verbose) {
     pb <- txtProgressBar(min = 0, max = n_iter, style = 3)
@@ -274,22 +276,22 @@ MMLN <- function(Y, X, Z, n_iter = 1000, burn_in = 0, thin = 1, mh_scale = 1, pr
       W_prop    <- W + mvnfast::rmvn(N, mu = rep(0, d), sigma = mh_scale * Sigma)
       log_q_old <- log_q_new <- rep(0, N)
     } else if(proposal == "beta") {
-      P_old     <- t(apply(W, 1, ytopstar))
-      P_new     <- t(apply(ymu, 1, betapropdist, Sigma = mh_scale * Sigma))
-      W_prop    <- t(apply(P_new, 1, pstartoy))
-      log_q_old <- apply(cbind(ymu, P_old), 1, betaloglike, Sigma = mh_scale * Sigma)
-      log_q_new <- apply(cbind(ymu, P_new), 1, betaloglike, Sigma = mh_scale * Sigma)
+      mh_update_output <- mh_update_beta_cpp(W, Y, Mu, mh_scale * Sigma)
+      W_prop    <- mh_update_output$W_new
+      log_q_old <- mh_update_output$log_q_old
+      log_q_new <- mh_update_output$log_q_new
     } else {
-      W_prop    <- t(apply(ymu, 1, normbetapropdist, Sigma = mh_scale * Sigma))
-      log_q_old <- apply(cbind(ymu, W), 1, normbetaloglike, Sigma = mh_scale * Sigma)
-      log_q_new <- apply(cbind(ymu, W_prop), 1, normbetaloglike, Sigma = mh_scale * Sigma)
+      mh_update_output    <- mh_update_normbeta_cpp(W, Y, Mu, mh_scale * Sigma)
+      W_prop    <- mh_update_output$W_new
+      log_q_old <- mh_update_output$log_q_old
+      log_q_new <- mh_update_output$log_q_new
     }
     expW   <- rowSums(exp(W)); expWp <- rowSums(exp(W_prop))
     ll_old <- rowSums(Y[,1:d] * W[,1:d]) - rowSums(Y * log1p(expW)) -
       0.5 * rowSums((W - Mu) %*% Sigma_inv * (W - Mu))
     ll_new <- rowSums(Y[,1:d] * W_prop[,1:d]) - rowSums(Y * log1p(expWp)) -
       0.5 * rowSums((W_prop - Mu) %*% Sigma_inv * (W_prop - Mu))
-    ratio  <- ll_new - ll_old + log_q_new - log_q_old
+    ratio  <- ll_new - ll_old + log_q_old - log_q_new
     if(!warned_na_ratio && anyNA(ratio)) {
       warning("NA detected in MH acceptance ratio; these proposals will be rejected.")
       warned_na_ratio <- TRUE
@@ -305,12 +307,24 @@ MMLN <- function(Y, X, Z, n_iter = 1000, burn_in = 0, thin = 1, mh_scale = 1, pr
     W[is.na(W)] <- 0
 
     # update random intercepts psi_j
-    R_tot <- W - X %*% beta
+    R_tot   <- W - X %*% beta
+    Phi_inv <- chol2inv(chol(Phi))
+
+    # V_j depends only on group size; compute once per unique size (not once per group)
+    V_by_size <- setNames(
+      lapply(unique_sizes, function(n) chol2inv(chol(Phi_inv + n * Sigma_inv))),
+      as.character(unique_sizes)
+    )
+
+    # group indices pre-computed outside MCMC loop; M_j uses upstream column-vector
+    # formula for bit-exact arithmetic; V_j reused from cache above
     for(j in seq_len(m)) {
-      idx <- which(Z[, j] == 1)
-      R_j <- R_tot[idx, , drop = FALSE]
-      V_j <- chol2inv(chol(chol2inv(chol(Phi)) + length(idx) * Sigma_inv))
-      M_j <- V_j %*% (Sigma_inv %*% colSums(R_j))
+      R_j      <- R_tot[group_indices[[j]], , drop = FALSE]
+      V_j      <- V_by_size[[as.character(group_sizes[j])]]
+      M_j      <- V_j %*% (Sigma_inv %*% colSums(R_j))
+
+      # This line is the slowest part, but the RNG chain get's reset for each j
+      # so the result would be different, but both valid randomness
       psi[j, ] <- mvnfast::rmvn(1, mu = as.vector(M_j), sigma = V_j)
     }
 
@@ -375,10 +389,10 @@ MMLN <- function(Y, X, Z, n_iter = 1000, burn_in = 0, thin = 1, mh_scale = 1, pr
       eta_sec     <- elapsed_sec / it * (n_iter - it)
 
       h <- floor(eta_sec / 3600)
-      m <- floor((eta_sec %% 3600) / 60)
+      mn <- floor((eta_sec %% 3600) / 60)
       s <- round(eta_sec %% 60)
 
-      eta_str <- sprintf("%02d:%02d:%02d", h, m, s)
+      eta_str <- sprintf("%02d:%02d:%02d", h, mn, s)
       cat(sprintf("\r ETA: %s", eta_str))
       flush.console()
     }
