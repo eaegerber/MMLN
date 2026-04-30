@@ -11,7 +11,3 @@ testing/*.RData
 src/*.o
 src/*.so
 src/*.dll
-
-# Rcpp auto-generated files
-src/RcppExports.cpp
-R/RcppExports.R

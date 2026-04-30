@@ -48,7 +48,13 @@ The following packages are required and will be installed automatically with MML
 
 - `car`, `dplyr`, `magrittr`, `MGLM`, `mvnfast`, `Rcpp`
 
-The `devtools` package is needed for installation:
+The `remotes` package is recommended for installing MMLN from GitHub:
+
+```r
+install.packages("remotes")
+```
+
+The `devtools` package is only needed for local development or installation from a local source directory:
 
 ```r
 install.packages("devtools")
@@ -61,7 +67,7 @@ install.packages("devtools")
 Install MMLN directly from GitHub:
 
 ```r
-devtools::install_github("eaegerber/MMLN")
+remotes::install_github("eaegerber/MMLN")
 ```
 
 Or install from a local source directory:
@@ -70,25 +76,26 @@ Or install from a local source directory:
 devtools::install("/path/to/MMLN")
 ```
 
+For contributor and development workflows, including regenerating Rcpp exports or package documentation, see [development.md](development.md).
+
 ---
 
-## Important: Loading the Package for C++ Support
+## Verify Installation
 
-After installing, load the package with `library()` as usual — but you must **also** call `devtools::load_all()` for the C++ backend to be active:
+After installing, load MMLN with `library()`:
 
 ```r
 library(MMLN)
-devtools::load_all()
 ```
 
-> **Without `devtools::load_all()`, the C++-optimized functions will not run.** This is a required step every time you start a new R session with MMLN. Skipping it is one of the most common sources of errors when first using the package.
-
-You can verify everything is working correctly with:
+You can verify that the compiled C++ backend is available and everything is working correctly with:
 
 ```r
 verify_installation()
 # Should print: "C++ is working w/ Rcpp"
 ```
+
+You should not need to call `devtools::load_all()` when using an installed version of MMLN. If the C++ backend is not available after `library(MMLN)`, the package installation should be rebuilt or reinstalled.
 
 ---
 
@@ -106,7 +113,7 @@ set.seed(42)
 
 sim <- simulate_mixed_mln_data(
   m       = 10,          # 10 groups
-  n_i     = 10,          # 10 observations per group
+  n_i     = 20,          # 20 observations per group
   p       = 3,           # 3 fixed covariates (incl. intercept)
   d       = 2,           # 3 outcome categories
   beta    = matrix(c(0.5, -1, 0.2, 0.3, 0.7, -0.4), 3, 2),
@@ -115,13 +122,16 @@ sim <- simulate_mixed_mln_data(
   n_mean = 200
 )
 
+head(sim$Y)
+colMeans(sim$Y)
+
 # 2. Fit a fixed-effects MLN model
 res_f <- FMLN(
   Y            = sim$Y,
   X            = sim$X,
-  n_iter       = 1000,
-  burn_in      = 300,
-  thin         = 2,
+  n_iter       = 2000,
+  burn_in      = 500,
+  thin         = 5,
   proposal     = "normbeta",
   verbose      = TRUE
 )
@@ -131,9 +141,9 @@ res_m <- MMLN(
   Y            = sim$Y,
   X            = sim$X,
   Z            = sim$Z,
-  n_iter       = 1000,
-  burn_in      = 300,
-  thin         = 2,
+  n_iter       = 2000,
+  burn_in      = 500,
+  thin         = 5,
   proposal     = "normbeta",
   verbose      = TRUE
 )
